@@ -1,0 +1,35 @@
+{
+  "name": "claude-code-mods",
+  "owner": {
+    "name": "Lu Shiyao",
+    "url": "https://github.com/Yao0558"
+  },
+  "description": "Claude Code mods that add information and safeguards above and below the prompt: risky-action cards, done alerts, a repo and usage bar, check results in the status line, and cross-session task progress.",
+  "plugins": [
+    {
+      "name": "danger-guard",
+      "source": "./danger-guard",
+      "description": "Asks on a card before risky actions: lists what a delete would remove and moves it to the Trash by default, shows what git reset, clean, force push and branch -D would lose, and asks before editing files outside the project"
+    },
+    {
+      "name": "done-alert",
+      "source": "./done-alert",
+      "description": "When a long turn ends, shows a green notice above the prompt (red on errors), rings while the app is in front and leaves the rest to its own notifications; sends a notification in the terminal"
+    },
+    {
+      "name": "repo-bar",
+      "source": "./repo-bar",
+      "description": "Shows the repo, branch and owner above the prompt, plus session cost, last-turn cost, plan quotas and context usage"
+    },
+    {
+      "name": "run-status",
+      "source": "./run-status",
+      "description": "Shows in the status line under the prompt whether tests, builds and type checks passed or failed"
+    },
+    {
+      "name": "task-progress",
+      "source": "./task-progress",
+      "description": "Lists every session's running task above the prompt with a progress bar, percent and time left (from per-step estimates when the task list gives them, with an over-estimate warning and a note for when you're needed); finished tasks turn green, and clicking a name jumps to that session"
+    }
+  ]
+}

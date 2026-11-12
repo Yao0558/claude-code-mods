@@ -1,0 +1,1 @@
+{ "name": "done-alert", "version": "0.3.1", "description": "When a long turn ends, shows a green notice above the prompt (red on errors), rings while the app is in front and leaves the rest to its own notifications; sends a notification in the terminal", "author": { "name": "Lu Shiyao", "url": "https://github.com/Yao0558" }, "license": "MIT", "types": "./types/index.d.ts" }

@@ -1,0 +1,1 @@
+{ "name": "run-status", "version": "0.3.0", "description": "Shows in the status line under the prompt whether tests, builds and type checks passed or failed", "author": { "name": "Lu Shiyao", "url": "https://github.com/Yao0558" }, "license": "MIT" }
