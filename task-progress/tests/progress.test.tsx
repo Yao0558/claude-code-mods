@@ -680,11 +680,44 @@ test('old status files and stray dismissals are cleaned up; the legacy dismissed
 })
 
 test('a headless -p run writes no status file', async ($, on) => {
-  const { files } = fakeSessions(on, 'english', { isShown: false })
+  const { files } = fakeSessions(on, 'english', { isShown: false, hasAppRecord: false })
   await $.session.start({ cwd: '/', surface: null, isInteractive: false })
   await $.turn.start({ text: 'reply ok', turnId: 't' })
   await $.turn.complete({ ...TURN_END, turnId: 't' })
   expect(files[`${DIR}/self.json`]).toBeUndefined()
+})
+
+// 别的会话开出来、还没人点开的会话：没有显示端，但 App 里有它的记录
+test('a session started by another session writes its progress before anyone opens it', async ($, on) => {
+  const { files } = fakeSessions(on, 'chinese', { isShown: false })
+  await $.session.start({ cwd: '/', surface: null, isInteractive: false })
+  await $.turn.start({ text: '整理研究资料', turnId: 't' })
+  expect([selfFile(files).localId, selfFile(files).task]).toEqual(['local_self', '整理研究资料'])
+})
+
+test('a session nobody has opened keeps writing its plan after the mod reloads mid-turn', async ($, on) => {
+  const { files } = fakeSessions(on, 'chinese', { isShown: false })
+  await $.session.start({ cwd: '/', surface: null, isInteractive: false })
+  await $.turn.start({ text: '整理研究资料', turnId: 't' })
+  // 模块重载：session.start 再来一次，这一轮没有新的 turn.start
+  await $.session.start({ cwd: '/', surface: null, isInteractive: false })
+  await $.tool.call({ tool: PLAN, items: [{ content: 'a', status: 'completed' }, { content: 'b', status: 'in_progress' }] })
+  expect(selfFile(files).steps).toEqual({ done: 1, active: 1, total: 2 })
+})
+
+test('when the App record shows up after start, the next turn finds it and writes', async ($, on) => {
+  const { files, ran } = fakeSessions(on, 'chinese', { isShown: false })
+  // 开会话时 App 还没写记录：grep 找不到；之后记录写好了
+  const record = files[APP_RECORD]!
+  delete files[APP_RECORD]
+  await $.session.start({ cwd: '/', surface: null, isInteractive: false })
+  await $.turn.start({ text: '第一轮', turnId: 't1' })
+  expect(files[`${DIR}/self.json`]).toBeUndefined()
+  files[APP_RECORD] = record
+  const greps = ran.filter(argv => argv[0] === 'grep').length
+  await $.turn.start({ text: '整理研究资料', turnId: 't2' })
+  expect(ran.filter(argv => argv[0] === 'grep').length).toBeGreaterThan(greps)
+  expect([selfFile(files).localId, selfFile(files).task]).toEqual(['local_self', '整理研究资料'])
 })
 
 test('when HOME and the session id fail at start, the timer is still set and picks the session up later', async ($, on) => {

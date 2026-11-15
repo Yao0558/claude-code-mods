@@ -87,7 +87,9 @@ const rows = atom({ plugin: 'task-progress', key: 'rows' } as const, [], { shape
 let home: string | null = null
 let dir: string | null = null
 let selfId = ''
-// -p 这类没人看的会话不写状态文件，免得在别的会话里冒出一行
+// -p 这类脚本跑的会话不写状态文件，免得在别的会话里冒出一行。桌面 App 的会话认 App 里的会话记录：
+// 按接口说明，App 开的会话在第一个窗口接上之前没有显示端，别的会话开出来、你还没点开的就是这样，
+// 只看显示端会漏掉它们（2026-11-15 两个这样开的会话一直没有进度）
 let canWrite = false
 let isInteractive = false
 let lastClean = 0
@@ -296,6 +298,7 @@ async function start($: EngineInterface): Promise<void> {
   }
   dir = `${home}/${STATUS_DIR}`
   await findIdentity($).catch(() => {})
+  canWrite = canWrite || identity.localId !== null
   // 模块重载后接着用自己文件里的状态：一轮进行中被重载，这一轮不会变成没人管的“正在跑”；
   // 跑完了的也接回来，接下来系统插进来的一轮（后台任务的通知）还能接着算这个任务
   const saved = await readJson<TaskStatus>($, `${dir}/${selfId}.json`)
@@ -325,7 +328,11 @@ async function beginTurn($: EngineInterface, text: string): Promise<void> {
     return
   }
   if (!canWrite) {
-    canWrite = (await $.session.surfaces().catch(() => [])).length > 0
+    // 开会话时 App 的记录可能还没写好，每轮再找一次
+    if (identity.localId === null) {
+      await findIdentity($).catch(() => {})
+    }
+    canWrite = identity.localId !== null || (await $.session.surfaces().catch(() => [])).length > 0
   }
   const now = await $.clock.now()
   const task = taskLine(text)
