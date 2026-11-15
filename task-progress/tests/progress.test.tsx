@@ -705,6 +705,23 @@ test('a session nobody has opened keeps writing its plan after the mod reloads m
   expect(selfFile(files).steps).toEqual({ done: 1, active: 1, total: 2 })
 })
 
+// 模块在一轮中途才载入（修好后热重载进一个早就开始的长轮）：没有 turn.start，更新计划时就开始记
+test('a plan update in a turn that began before the mod loaded starts the progress', async ($, on) => {
+  const { files } = fakeSessions(on, 'chinese', { isShown: false })
+  await $.session.start({ cwd: '/', surface: null, isInteractive: false })
+  expect(files[`${DIR}/self.json`]).toBeUndefined()
+  await $.tool.call({ tool: PLAN, items: [{ content: 'a', status: 'completed' }, { content: 'b', status: 'in_progress' }] })
+  const self = selfFile(files)
+  expect([self.state, self.localId, self.title, self.steps]).toEqual(['running', 'local_self', '整理研究资料', { done: 1, active: 1, total: 2 }])
+})
+
+test('a headless -p run does not start progress from a plan update either', async ($, on) => {
+  const { files } = fakeSessions(on, 'english', { isShown: false, hasAppRecord: false })
+  await $.session.start({ cwd: '/', surface: null, isInteractive: false })
+  await $.tool.call({ tool: PLAN, items: [{ content: 'a', status: 'in_progress' }] })
+  expect(files[`${DIR}/self.json`]).toBeUndefined()
+})
+
 test('when the App record shows up after start, the next turn finds it and writes', async ($, on) => {
   const { files, ran } = fakeSessions(on, 'chinese', { isShown: false })
   // 开会话时 App 还没写记录：grep 找不到；之后记录写好了

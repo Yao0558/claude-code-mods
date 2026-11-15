@@ -359,10 +359,17 @@ async function beginTurn($: EngineInterface, text: string): Promise<void> {
 }
 
 async function afterPlan($: EngineInterface, tool: string, input: unknown): Promise<void> {
+  const now = await $.clock.now()
+  // 这一轮开始时还不能写（或模块是这一轮中途才载入的），本会话还没有状态：从这次更新计划算起，
+  // 不然要等下一轮才出进度（2026-11-15 两个子会话一轮跑了 40 多分钟，修好写入判断后仍没有进度）
+  if (mine === null && canWrite && selfId !== '') {
+    steps = []
+    lastBeat = now
+    mine = { v: 1, cliId: selfId, ...identity, task: '', state: 'running', startedAt: now, updatedAt: now, finishedAt: null, steps: null }
+  }
   if (mine?.state !== 'running') {
     return
   }
-  const now = await $.clock.now()
   steps = applyPlan(steps, tool, input, now)
   mine = { ...mine, steps: countSteps(steps), plan: steps, updatedAt: now }
   await save($).catch(() => {})
