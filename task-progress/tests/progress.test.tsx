@@ -722,6 +722,50 @@ test('a headless -p run does not start progress from a plan update either', asyn
   expect(files[`${DIR}/self.json`]).toBeUndefined()
 })
 
+// 子会话一轮跑很久：App 的记录在这一轮开始之后才写好，等不到下一轮
+test('when the App record shows up mid-turn, the timer finds it and writes the turn from its real start', async ($, on) => {
+  const { files, clock } = fakeSessions(on, 'chinese', { isShown: false })
+  const record = files[APP_RECORD]!
+  delete files[APP_RECORD]
+  await $.session.start({ cwd: '/', surface: null, isInteractive: false })
+  await $.turn.start({ text: '整理研究资料', turnId: 't' })
+  const startedAt = 1000
+  await clock.advance(40_000)
+  expect(files[`${DIR}/self.json`]).toBeUndefined()
+  files[APP_RECORD] = record
+  await clock.advance(40_000)
+  const self = selfFile(files)
+  expect([self.state, self.localId, self.task, self.startedAt]).toEqual(['running', 'local_self', '整理研究资料', startedAt])
+})
+
+test('when the App record shows up after the turn ended, the finished turn is still written', async ($, on) => {
+  const { files, clock } = fakeSessions(on, 'chinese', { isShown: false })
+  const record = files[APP_RECORD]!
+  delete files[APP_RECORD]
+  await $.session.start({ cwd: '/', surface: null, isInteractive: false })
+  await $.turn.start({ text: '整理研究资料', turnId: 't' })
+  await clock.advance(40_000)
+  await $.turn.complete({ ...TURN_END, turnId: 't' })
+  expect(files[`${DIR}/self.json`]).toBeUndefined()
+  files[APP_RECORD] = record
+  await clock.advance(40_000)
+  expect([selfFile(files).state, selfFile(files).localId]).toEqual(['done', 'local_self'])
+})
+
+test('when the App record shows up mid-turn, the next plan update finds it and writes', async ($, on) => {
+  const { files } = fakeSessions(on, 'chinese', { isShown: false })
+  const record = files[APP_RECORD]!
+  delete files[APP_RECORD]
+  await $.session.start({ cwd: '/', surface: null, isInteractive: false })
+  await $.turn.start({ text: '整理研究资料', turnId: 't' })
+  await $.tool.call({ tool: PLAN, items: [{ content: 'a', status: 'in_progress' }, { content: 'b', status: 'pending' }] })
+  expect(files[`${DIR}/self.json`]).toBeUndefined()
+  files[APP_RECORD] = record
+  await $.tool.call({ tool: PLAN, advance: true })
+  const self = selfFile(files)
+  expect([self.task, self.steps]).toEqual(['整理研究资料', { done: 1, active: 1, total: 2 }])
+})
+
 test('when the App record shows up after start, the next turn finds it and writes', async ($, on) => {
   const { files, ran } = fakeSessions(on, 'chinese', { isShown: false })
   // 开会话时 App 还没写记录：grep 找不到；之后记录写好了

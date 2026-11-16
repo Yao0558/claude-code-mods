@@ -24,6 +24,8 @@ const LOCAL_ID = /^local_[A-Za-z0-9-]{1,64}$/
 
 const REFRESH_MS = 5000
 const HEARTBEAT_MS = 20_000
+// 还不能写的会话隔多久再找一次 App 的会话记录
+const WRITE_CHECK_MS = 30_000
 // 名字一栏按最长的名字定宽：几行的进度条起点对齐，名字短时也不会空出一大截
 const NAME_MIN = 8
 const NAME_MAX = 26
@@ -97,6 +99,7 @@ let identity: { localId: string | null; title: string | null } = { localId: null
 let mine: TaskStatus | null = null
 let steps: PlanStep[] = []
 let lastBeat = 0
+let lastWriteCheck = 0
 // 第一次刷新一定写一次：重载后 $.state 里可能还留着旧的行
 let lastRows: string | null = null
 
@@ -247,6 +250,16 @@ async function tick($: EngineInterface): Promise<void> {
   if (now - lastClean >= CLEAN_EVERY_MS) {
     await cleanUp($, now).catch(() => {})
   }
+  // 子会话开起来时，App 往往还没把会话 id 记进记录；它可能一轮跑很久，等不到下一轮再判断。
+  // 隔一会儿再找，找到了就把内存里一直在算的进度写出去（起点仍是这一轮真正开始的时间）
+  if (!canWrite && selfId !== '' && now - lastWriteCheck >= WRITE_CHECK_MS) {
+    lastWriteCheck = now
+    if ((await checkCanWrite($)) && mine !== null) {
+      mine = { ...mine, ...identity, ...(mine.state === 'running' ? { updatedAt: now } : {}) }
+      lastBeat = now
+      await save($).catch(() => {})
+    }
+  }
   if (mine?.state === 'running' && now - lastBeat >= HEARTBEAT_MS) {
     lastBeat = now
     mine = { ...mine, updatedAt: now }
@@ -327,13 +340,7 @@ async function beginTurn($: EngineInterface, text: string): Promise<void> {
   if (selfId === '') {
     return
   }
-  if (!canWrite) {
-    // 开会话时 App 的记录可能还没写好，每轮再找一次
-    if (identity.localId === null) {
-      await findIdentity($).catch(() => {})
-    }
-    canWrite = identity.localId !== null || (await $.session.surfaces().catch(() => [])).length > 0
-  }
+  await checkCanWrite($)
   const now = await $.clock.now()
   const task = taskLine(text)
   lastBeat = now
@@ -358,7 +365,20 @@ async function beginTurn($: EngineInterface, text: string): Promise<void> {
   await save($)
 }
 
+// 开会话时 App 的记录可能还没写好：还不能写时再找一次记录、看一眼显示端
+async function checkCanWrite($: EngineInterface): Promise<boolean> {
+  if (!canWrite) {
+    if (identity.localId === null) {
+      await findIdentity($).catch(() => {})
+    }
+    canWrite = identity.localId !== null || (await $.session.surfaces().catch(() => [])).length > 0
+  }
+
+  return canWrite
+}
+
 async function afterPlan($: EngineInterface, tool: string, input: unknown): Promise<void> {
+  await checkCanWrite($)
   const now = await $.clock.now()
   // 这一轮开始时还不能写（或模块是这一轮中途才载入的），本会话还没有状态：从这次更新计划算起，
   // 不然要等下一轮才出进度（2026-11-15 两个子会话一轮跑了 40 多分钟，修好写入判断后仍没有进度）
